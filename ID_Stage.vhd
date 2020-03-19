@@ -1,0 +1,199 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+entity ID_stage is
+port(clk: in std_logic;
+	IF_ID_buffer_opcode: in std_logic_vector(2 downto 0);
+	IF_ID_buffer_Rs: in std_logic_vector(3 downto 0);
+	IF_ID_buffer_Rt: in std_logic_vector(3 downto 0);
+	IF_ID_buffer_Rd: in std_logic_vector(3 downto 0);
+	IF_ID_buffer_Funct:in std_logic_vector(16 downto 0);
+	IF_ID_buffer_immediate:in std_logic_vector(20 downto 0);
+	pc_4_in: in std_logic_vector(31 downto 0);
+	EX_Mem_Rd: in std_logic_vector(3 downto 0);
+	EX_Mem_MemRead:in std_logic;
+	EX_Mem_RegWrite: in std_logic;
+	Mem_WB_RegWrite:in std_logic;
+	Mem_WB_Rd: in std_logic_vector(3 downto 0);
+	WB_Mux_Wdata:in std_logic_vector(31 downto 0):=(others=>'0');
+	EX_Mem_Rd_data:in std_logic_vector(31 downto 0);
+	ID_EX_Mem_Reg:out std_logic;
+	ID_EX_Reg_dst: out std_logic;
+	ID_EX_Mem_Write: out std_logic;
+	ID_EX_Mem_Read: out std_logic;
+	ID_EX_Reg_write: out std_logic;
+	ID_EX_Alu_src: out std_logic;
+	ID_EX_ALU_op: out std_logic_vector(2 downto 0);
+	ID_EX_Rs_data:out std_logic_vector(31 downto 0);
+	ID_EX_Rt_data:out std_logic_vector(31 downto 0);
+	ID_EX_functional: out std_logic_vector(16 downto 0);
+	ID_EX_immediate: out std_logic_vector(31 downto 0);
+	ID_EX_Rd: out std_logic_vector(3 downto 0);
+	ID_EX_Rt: out std_logic_vector(3 downto 0);
+	ID_EX_Rs: out std_logic_vector(3 downto 0);
+	IM_select:out std_logic;
+	pc_mux:out std_logic_vector(1 downto 0);
+	branch_address:out std_logic_vector(31 downto 0);
+	id_ex_comparision:out std_logic;
+  id_ex_branch_signal:out std_logic;
+  id_ex_hz_out:out std_logic;
+  jump_out:out std_logic_vector(31 downto 0);
+  opcode_out:out std_logic_vector(2 downto 0));
+end ID_stage;
+architecture behave of ID_stage is
+component hazard_unit is
+port(
+	opcode: in std_logic_vector(2 downto 0);
+	ID_EX_MemRead: in std_logic;
+	IF_ID_Rs: in std_logic_vector(3 downto 0);
+	ID_EX_Rt: in std_logic_vector(3 downto 0);
+	IF_ID_Rt: in std_logic_vector(3 downto 0);
+	IM_select:out std_logic;
+	cntrl_Mux: out std_logic;
+	pc_Mux: out std_logic_vector(1 downto 0);
+	comparision: in std_logic;
+	branch_signal: in std_logic;
+	ID_EX_Rd:in std_logic_vector(3 downto 0);
+	ID_EX_RegWrite: in std_logic;
+	EX_Mem_Rd: in std_logic_vector(3 downto 0);
+	EX_Mem_MemRead:in std_logic;
+	EX_Mem_RegWrite: in std_logic;
+	Forward_branch_Rs: out std_logic_vector(1 downto 0);
+	Forward_branch_Rt: out std_logic_vector(1 downto 0);
+	Mem_WB_RegWrite:in std_logic;
+	Mem_WB_Rd: in std_logic_vector(3 downto 0);
+	id_ex_comparision:in std_logic;
+  id_ex_branch_signal:in std_logic;
+  opcode_feedback:in std_logic_vector(2 downto 0));
+end component;
+component control_unit is
+port(clk:in std_logic;
+     op_code: in std_logic_vector(2 downto 0);
+     Mem_Reg: out std_logic;
+     Reg_dst: out std_logic;
+     Mem_Write: out std_logic;
+     Mem_Read: out std_logic;
+     Reg_write: out std_logic;
+     Alu_src: out std_logic;
+     branch_signal:out std_logic;
+     ALU_op: out std_logic_vector(2 downto 0));
+end component;
+component RegFile is
+port(clk:in std_logic;
+RegWrite:in std_logic;
+Rreg1:in std_logic_vector(3 downto 0):=(others=>'0');
+Rreg2:in std_logic_vector(3 downto 0):=(others=>'0');
+Wreg:in std_logic_vector(3 downto 0):=(others=>'0');
+Wdata:in std_logic_vector(31 downto 0):=(others=>'0');
+Rdata1:out std_logic_vector(31 downto 0):=(others=>'0');
+Rdata2:out std_logic_vector(31 downto 0):=(others=>'0'));
+end component;
+component control_select is
+port(cntrl_Mux:in std_logic;
+     Mem_Reg: in std_logic;
+     Reg_dst: in std_logic;
+     Mem_Write: in std_logic;
+     Mem_Read: in std_logic;
+     Reg_write: in std_logic;
+     Alu_src: in std_logic;
+     branch_signal:in std_logic;
+     ALU_op: in std_logic_vector(2 downto 0);
+     cntrlMem_Reg: out std_logic;
+     cntrlReg_dst: out std_logic;
+     cntrlMem_Write: out std_logic;
+     cntrlMem_Read: out std_logic;
+     cntrlReg_write: out std_logic;
+     cntrlAlu_src: out std_logic;
+     cntrlbranch_signal:out std_logic;
+     cntrlALU_op: out std_logic_vector(2 downto 0));
+end component;
+component branch_determine is
+  port(
+    branch_determine: in std_logic:='0';
+    input_1: in std_logic_vector(31 downto 0);
+    input_2: in std_logic_vector(31 downto 0);
+    branch_output: out std_logic:='0'
+  );
+end component;
+component shift_L is
+port(shift2_in: in std_logic_vector(31 downto 0);
+     shift2_out:out std_logic_vector(31 downto 0));
+end component;
+component sign_ext is
+port(
+     sign_in:in std_logic_vector(20 downto 0);
+     sign_out:out std_logic_vector(31 downto 0));
+end component;
+component branchadd is
+port(clk:std_logic;
+     pc4_input:in std_logic_vector(31 downto 0);
+     shift_out:in std_logic_vector(31 downto 0);    
+     adder_output:out std_logic_vector(31 downto 0)
+     );
+end component;
+component idexbuff is
+port(
+     clk:in std_logic;
+     alu_op:in std_logic_vector(2 downto 0):=(others=>'X');
+     mem_read,alu_select,reg_dest,reg_write,mem_reg,mem_write:in std_logic:='0';
+     reg_rt,reg_rd,reg_rs:in std_logic_vector(3 downto 0):=(others=>'0');
+     func_op:in std_logic_vector(16 downto 0):=(others=>'0');
+     reg1_value,reg2_value,offset:in std_logic_vector(31 downto 0):=(others=>'0');
+     out_aluop:out std_logic_vector(2 downto 0):=(others=>'0');
+     out_memread,out_aluselect,out_regdest,out_regwrite,out_memreg,out_memwrite:out std_logic:='0';
+     out_regrt,out_regrd,out_regrs:out std_logic_vector(3 downto 0):=(others=>'0');
+     out_funcop:out std_logic_vector(16 downto 0):=(others=>'0');
+     out_reg1value,out_reg2value,out_offset:out std_logic_vector(31 downto 0):=(others=>'0');
+     comparision:in std_logic;
+     branch_signal:in std_logic;
+     id_ex_comparision:out std_logic;
+     id_ex_branch_signal:out std_logic;
+     hz_in:in std_logic;
+     hz_out:out std_logic;
+     opcode_in:in std_logic_vector(2 downto 0);
+     opcode_out:out std_logic_vector(2 downto 0)
+    );
+end component;
+component threemux is
+port (
+      
+      sel : in std_logic_vector(1 downto 0);
+      input_1 : in std_logic_vector ( 31 downto 0);
+      input_2: in std_logic_vector (31 downto 0);
+      input_3 : in std_logic_vector (31 downto 0);
+      output_mux : out std_logic_vector (31 downto 0)
+     );
+end component;
+signal cntrl_Mux,comparision,branch_signal,Mem_Reg,Reg_dst,Mem_Write,Mem_Read,Reg_write,Alu_src,cntrlMem_Reg,cntrlReg_dst,
+       cntrlMem_Write,cntrlMem_Read,cntrlReg_write,cntrlAlu_src,cntrlbranch_signal,ID_EX_Reg_write_signal,ID_EX_Mem_Read_signal,id_ex_comparision_signal,id_ex_branch_signal_signal:std_logic;
+signal Forward_branch_Rs,Forward_branch_Rt:std_logic_vector(1 downto 0);
+signal ALU_op,cntrlALU_op,opcode_out_signal:std_logic_vector(2 downto 0);
+signal ID_EX_Rd_signal,ID_EX_Rt_signal:std_logic_vector(3 downto 0);
+signal Rdata1,Rdata2,branch_mux1,branch_mux2,sign_out,shift_out:std_logic_vector(31 downto 0);
+begin
+X1:hazard_unit port map(IF_ID_buffer_opcode,ID_EX_Mem_Read_signal,IF_ID_buffer_Rs,ID_EX_Rt_signal,IF_ID_buffer_Rt,IM_select,cntrl_Mux,pc_mux,comparision,
+branch_signal,ID_EX_Rd_signal,ID_EX_Reg_write_signal,EX_Mem_Rd,EX_Mem_MemRead,EX_Mem_RegWrite,Forward_branch_Rs,Forward_branch_Rt,Mem_WB_RegWrite,Mem_WB_Rd,
+id_ex_comparision_signal,id_ex_branch_signal_signal,opcode_out_signal);
+X2:control_unit port map(clk,IF_ID_buffer_opcode,Mem_Reg,Reg_dst,Mem_Write,Mem_Read,Reg_write,Alu_src,branch_signal,ALU_op);
+X3:RegFile port map(clk,Mem_WB_RegWrite,IF_ID_buffer_Rs,IF_ID_buffer_Rt,Mem_WB_Rd,WB_Mux_Wdata,Rdata1,Rdata2);
+X4:control_select port map(cntrl_Mux, Mem_Reg,Reg_dst,Mem_Write,Mem_Read,Reg_write,Alu_src,branch_signal,ALU_op,
+                           cntrlMem_Reg,cntrlReg_dst,cntrlMem_Write,cntrlMem_Read,cntrlReg_write,cntrlAlu_src,cntrlbranch_signal,cntrlALU_op);
+X5:branch_determine port map(branch_signal,branch_mux1,branch_mux2,comparision);
+X6:shift_L port map(sign_out,shift_out);
+X7:sign_ext port map(IF_ID_buffer_immediate,sign_out);
+X8:branchadd port map(clk,pc_4_in,shift_out,branch_address);
+X9:idexbuff port map(clk,cntrlALU_op,cntrlMem_Read,cntrlAlu_src,cntrlReg_dst,cntrlReg_write,cntrlMem_Reg,cntrlMem_Write,IF_ID_buffer_Rt,
+         IF_ID_buffer_Rd,IF_ID_buffer_Rs,IF_ID_buffer_Funct,Rdata1,Rdata2,sign_out,ID_EX_ALU_op,ID_EX_Mem_Read_signal,ID_EX_Alu_src,ID_EX_Reg_dst,
+ID_EX_Reg_write_signal,ID_EX_Mem_Reg,ID_EX_Mem_Write,ID_EX_Rt_signal,ID_EX_Rd_signal,ID_EX_Rs,ID_EX_functional,ID_EX_Rs_data,ID_EX_Rt_data,ID_EX_immediate,comparision,
+branch_signal,id_ex_comparision_signal,id_ex_branch_signal_signal,cntrl_Mux,id_ex_hz_out,IF_ID_buffer_opcode,opcode_out_signal);
+X10:threemux port map(Forward_branch_Rs,Rdata1,EX_Mem_Rd_data,WB_Mux_Wdata,branch_mux1);
+X11:threemux port map(Forward_branch_Rt,Rdata2,EX_Mem_Rd_data,WB_Mux_Wdata,branch_mux2);
+ID_EX_Reg_write<=ID_EX_Reg_write_signal;
+ID_EX_Rd<=ID_EX_Rd_signal;
+ID_EX_Rt<=ID_EX_Rt_signal;
+ID_EX_Mem_Read<=ID_EX_Mem_Read_signal;
+id_ex_comparision<=id_ex_comparision_signal;
+id_ex_branch_signal<=id_ex_branch_signal_signal;
+opcode_out<=opcode_out_signal;
+jump_out<=Rdata1;
+end behave;

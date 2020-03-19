@@ -1,0 +1,75 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+entity if_stage is
+port( clk: in std_logic;
+      hazard_input:in std_logic_vector(1 downto 0):=(others=>'0');
+      hazard_input1:in std_logic;
+      branch_input:in std_logic_vector(31 downto 0):=(others=>'0');
+      jump_in: in std_logic_vector(31 downto 0):=(others=>'0');
+      ifid_pc4:out std_logic_vector(31 downto 0):=(others=>'0');
+      ifid_ir:out std_logic_vector(31 downto 0):=(others=>'0')
+     );
+end if_stage;
+architecture ifs of if_stage is
+component twomux 
+port ( 
+      sel : in std_logic;
+      input_1: in std_logic_vector(31 downto 0);
+      input_2: in std_logic_vector(31 downto 0);
+      output_2mux : out std_logic_vector(31 downto 0)
+      );
+end component;
+
+component pc 
+  port(
+       clk: in std_logic;
+       mux_input:in std_logic_vector(31 downto 0):=(others=>'0');
+       pc_output:out std_logic_vector(31 downto 0):=(others=>'0')
+      );
+ end component;
+
+component IM 
+port(
+IM_in: in std_logic_vector(31 downto 0):=(others=>'0');
+IM_out: out std_logic_vector(31 downto 0):=(others=>'0'));
+end component;
+
+component adder 
+port(
+     
+     pc_input:in std_logic_vector(31 downto 0);    
+     adder_output:out std_logic_vector(31 downto 0)
+     );
+end component;
+
+component ifidbuff 
+port(
+       clk: in std_logic;
+       ir_input: in std_logic_vector(31 downto 0):=  (others =>'0');
+       pc_input: in std_logic_vector(31 downto 0):=  (others =>'0'); 
+       output: out std_logic_vector(31 downto 0):=  (others =>'0');
+       output_pcaddr:out std_logic_vector(31 downto 0):= (others =>'0')
+    );
+end component;
+
+component fourmux 
+port (
+      
+      sel: in std_logic_vector(1 downto 0):=(others=>'0');
+      input_1,input_2,input_3,input_4 : in std_logic_vector ( 31 downto 0):=(others=>'0'); 
+      output_mux : out std_logic_vector (31 downto 0):=(others=>'0')
+     );
+end component;
+
+signal pc_in,pc_out,im_out,im_muxout,pc4_out,ifid_irs:std_logic_vector(31 downto 0);
+
+begin  
+x1: fourmux port map(hazard_input,pc4_out,branch_input,jump_in,pc_out,pc_in);
+x2: pc port map(clk,pc_in,pc_out);
+x3: IM port map(pc_out,im_out);
+x4: twomux port map(hazard_input1,im_out,ifid_irs,im_muxout);
+x5: adder port map(pc_out,pc4_out);
+x6: ifidbuff port map(clk,im_muxout,pc4_out,ifid_irs,ifid_pc4);
+ifid_ir<=ifid_irs;
+end ifs;

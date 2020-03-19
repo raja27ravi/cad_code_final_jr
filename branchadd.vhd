@@ -1,0 +1,22 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_Std.all;
+
+entity branchadd is
+port(clk:std_logic;
+     pc4_input:in std_logic_vector(31 downto 0);
+     shift_out:in std_logic_vector(31 downto 0);    
+     adder_output:out std_logic_vector(31 downto 0)
+     );
+end branchadd;
+architecture add of branchadd is
+begin
+  process(clk)
+    begin
+      if (rising_edge(clk)) then
+  
+     adder_output<= std_logic_vector(unsigned(pc4_input) + unsigned(shift_out));
+   end if;
+ end process;
+   
+end add;
